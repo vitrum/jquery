@@ -1,91 +1,118 @@
-/*jshint multistr:true*/
+/* eslint no-multi-str: "off" */
 
-var jQuery = this.jQuery || "jQuery", // For testing .noConflict()
-	$ = this.$ || "$",
-	originaljQuery = jQuery,
-	original$ = $,
-	hasPHP = true,
-	amdDefined;
+"use strict";
 
-/**
- * Set up a mock AMD define function for testing AMD registration.
- */
-function define( name, dependencies, callback ) {
-	amdDefined = callback();
-}
+var FILEPATH = "/test/data/testinit.js",
+	activeScript = [].slice.call( document.getElementsByTagName( "script" ), -1 )[ 0 ],
+	parentUrl = activeScript && activeScript.src ?
+		activeScript.src.replace( /[?#].*/, "" ) + FILEPATH.replace( /[^/]+/g, ".." ) + "/" :
+		"../",
 
-define.amd = {
-	jQuery: true
-};
+	// baseURL is intentionally set to "data/" instead of "".
+	// This is not just for convenience (since most files are in data/)
+	// but also to ensure that urls without prefix fail.
+	// Otherwise it's easy to write tests that pass on test/index.html
+	// but fail in Karma runner (where the baseURL is different).
+	baseURL = parentUrl + "test/data/",
+	supportjQuery = this.jQuery,
+
+	// see RFC 2606
+	externalHost = "example.com";
+
+this.hasPHP = true;
+this.isLocal = window.location.protocol === "file:";
+
+// Setup global variables before loading jQuery for testing .noConflict()
+supportjQuery.noConflict( true );
+window.originaljQuery = this.jQuery = undefined;
+window.original$ = this.$ = "replaced";
 
 /**
  * Returns an array of elements with the given IDs
- * @example q("main", "foo", "bar")
+ * @example q( "main", "foo", "bar" )
  * @result [<div id="main">, <span id="foo">, <input id="bar">]
  */
-function q() {
+this.q = function() {
 	var r = [],
 		i = 0;
 
 	for ( ; i < arguments.length; i++ ) {
-		r.push( document.getElementById( arguments[i] ) );
+		r.push( document.getElementById( arguments[ i ] ) );
 	}
 	return r;
-}
+};
 
 /**
  * Asserts that a select matches the given IDs
- * @param {String} a - Assertion name
- * @param {String} b - Sizzle selector
- * @param {String} c - Array of ids to construct what is expected
- * @example t("Check for something", "//[a]", ["foo", "baar"]);
- * @result returns true if "//[a]" return two elements with the IDs 'foo' and 'baar'
+ * @param {String} message - Assertion name
+ * @param {String} selector - jQuery selector
+ * @param {String} expectedIds - Array of ids to construct what is expected
+ * @param {(String|Node)=document} context - Selector context
+ * @example match("Check for something", "p", ["foo", "bar"]);
  */
-function t( a, b, c ) {
-	var f = jQuery(b).get(),
-		s = "",
-		i = 0;
+function match( message, selector, expectedIds, context, assert ) {
+	var elems = jQuery( selector, context ).get();
 
-	for ( ; i < f.length; i++ ) {
-		s += ( s && "," ) + '"' + f[ i ].id + '"';
-	}
-
-	deepEqual(f, q.apply( q, c ), a + " (" + b + ")");
+	assert.deepEqual( elems, q.apply( q, expectedIds ), message + " (" + selector + ")" );
 }
 
-var createDashboardXML = function() {
-	var string = '<?xml version="1.0" encoding="UTF-8"?> \
+/**
+ * Asserts that a select matches the given IDs.
+ * The select is not bound by a context.
+ * @param {String} message - Assertion name
+ * @param {String} selector - jQuery selector
+ * @param {String} expectedIds - Array of ids to construct what is expected
+ * @example t("Check for something", "p", ["foo", "bar"]);
+ */
+QUnit.assert.t = function( message, selector, expectedIds ) {
+	match( message, selector, expectedIds, undefined, QUnit.assert );
+};
+
+/**
+ * Asserts that a select matches the given IDs.
+ * The select is performed within the `#qunit-fixture` context.
+ * @param {String} message - Assertion name
+ * @param {String} selector - jQuery selector
+ * @param {String} expectedIds - Array of ids to construct what is expected
+ * @example selectInFixture("Check for something", "p", ["foo", "bar"]);
+ */
+QUnit.assert.selectInFixture = function( message, selector, expectedIds ) {
+	match( message, selector, expectedIds, "#qunit-fixture", QUnit.assert );
+};
+
+this.createDashboardXML = function() {
+	var string = "<?xml version='1.0' encoding='UTF-8'?> \
 	<dashboard> \
-		<locations class="foo"> \
-			<location for="bar" checked="different"> \
-				<infowindowtab normal="ab" mixedCase="yes"> \
-					<tab title="Location"><![CDATA[blabla]]></tab> \
-					<tab title="Users"><![CDATA[blublu]]></tab> \
+		<locations class='foo'> \
+			<location for='bar' checked='different'> \
+				<infowindowtab normal='ab' mixedCase='yes'> \
+					<tab title='Location'><![CDATA[blabla]]></tab> \
+					<tab title='Users'><![CDATA[blublu]]></tab> \
 				</infowindowtab> \
 			</location> \
 		</locations> \
-	</dashboard>';
+	</dashboard>";
 
-	return jQuery.parseXML(string);
+	return jQuery.parseXML( string );
 };
 
-var createWithFriesXML = function() {
-	var string = '<?xml version="1.0" encoding="UTF-8"?> \
-	<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" \
-		xmlns:xsd="http://www.w3.org/2001/XMLSchema" \
-		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"> \
+this.createWithFriesXML = function() {
+	var string = "<?xml version='1.0' encoding='UTF-8'?> \
+	<soap:Envelope xmlns:soap='http://schemas.xmlsoap.org/soap/envelope/' \
+		xmlns:xsd='http://www.w3.org/2001/XMLSchema' \
+		xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'> \
 		<soap:Body> \
-			<jsconf xmlns="http://www.example.com/ns1"> \
-				<response xmlns:ab="http://www.example.com/ns2"> \
+			<jsconf xmlns='http://www.example.com/ns1'> \
+				<response xmlns:ab='http://www.example.com/ns2'> \
 					<meta> \
-						<component id="seite1" class="component"> \
-							<properties xmlns:cd="http://www.example.com/ns3"> \
-								<property name="prop1"> \
+						<component id='seite1' class='component'> \
+							<properties xmlns:cd='http://www.example.com/ns3'> \
+								<property name='prop1'> \
 									<thing /> \
 									<value>1</value> \
 								</property> \
-								<property name="prop2"> \
-									<thing att="something" /> \
+								<property name='prop2'> \
+									<thing att='something' /> \
 								</property> \
 								<foo_bar>foo</foo_bar> \
 							</properties> \
@@ -94,145 +121,279 @@ var createWithFriesXML = function() {
 				</response> \
 			</jsconf> \
 		</soap:Body> \
-	</soap:Envelope>';
+	</soap:Envelope>";
 
-	return jQuery.parseXML(string);
+	return jQuery.parseXML( string );
 };
 
-var fireNative;
-if ( document.createEvent ) {
-	fireNative = function( node, type ) {
-		var event = document.createEvent('HTMLEvents');
+this.createXMLFragment = function() {
+	var frag,
+		xml = document.implementation.createDocument( "", "", null );
+
+	if ( xml ) {
+		frag = xml.createElement( "data" );
+	}
+
+	return frag;
+};
+
+window.fireNative = document.createEvent ?
+	function( node, type ) {
+		var event = document.createEvent( "HTMLEvents" );
+
 		event.initEvent( type, true, true );
 		node.dispatchEvent( event );
+	} :
+	function( node, type ) {
+		node.fireEvent( "on" + type, document.createEventObject() );
 	};
-} else {
-	fireNative = function( node, type ) {
-		var event = document.createEventObject();
-		node.fireEvent( 'on' + type, event );
-	};
-}
 
 /**
  * Add random number to url to stop caching
  *
- * @example url("data/test.html")
- * @result "data/test.html?10538358428943"
+ * Also prefixes with baseURL automatically.
  *
- * @example url("data/test.php?foo=bar")
- * @result "data/test.php?foo=bar&10538358345554"
+ * @example url("index.html")
+ * @result "data/index.html?10538358428943"
+ *
+ * @example url("mock.php?foo=bar")
+ * @result "data/mock.php?foo=bar&10538358345554"
  */
 function url( value ) {
-	return value + (/\?/.test(value) ? "&" : "?") + new Date().getTime() + "" + parseInt(Math.random()*100000);
+	return baseURL + value + ( /\?/.test( value ) ? "&" : "?" ) +
+		new Date().getTime() + "" + parseInt( Math.random() * 100000, 10 );
 }
 
-(function () {
-	// Store the old counts so that we only assert on tests that have actually leaked,
-	// instead of asserting every time a test has leaked sometime in the past
-	var oldCacheLength = 0,
-		oldFragmentsLength = 0,
-		oldTimersLength = 0,
-		oldActive = 0;
+// Ajax testing helper
+this.ajaxTest = function( title, expect, options ) {
+	QUnit.test( title, function( assert ) {
+		assert.expect( expect );
+		var requestOptions;
 
-	/**
-	 * Ensures that tests have cleaned up properly after themselves. Should be passed as the
-	 * teardown function on all modules' lifecycle object.
-	 */
-	this.moduleTeardown = function () {
-		var i, fragmentsLength = 0, cacheLength = 0;
-
-		// Allow QUnit.reset to clean up any attached elements before checking for leaks
-		QUnit.reset();
-
-		for ( i in jQuery.cache ) {
-			++cacheLength;
+		if ( typeof options === "function" ) {
+			options = options( assert );
+		}
+		options = options || [];
+		requestOptions = options.requests || options.request || options;
+		if ( !Array.isArray( requestOptions ) ) {
+			requestOptions = [ requestOptions ];
 		}
 
-		jQuery.fragments = {};
+		var done = assert.async();
 
-		for ( i in jQuery.fragments ) {
-			++fragmentsLength;
+		if ( options.setup ) {
+			options.setup();
 		}
 
-		// Because QUnit doesn't have a mechanism for retrieving the number of expected assertions for a test,
-		// if we unconditionally assert any of these, the test will fail with too many assertions :|
-		if ( cacheLength !== oldCacheLength ) {
-			equal( cacheLength, oldCacheLength, "No unit tests leak memory in jQuery.cache" );
-			oldCacheLength = cacheLength;
-		}
-		if ( fragmentsLength !== oldFragmentsLength ) {
-			equal( fragmentsLength, oldFragmentsLength, "No unit tests leak memory in jQuery.fragments" );
-			oldFragmentsLength = fragmentsLength;
-		}
-		if ( jQuery.timers && jQuery.timers.length !== oldTimersLength ) {
-			equal( jQuery.timers.length, oldTimersLength, "No timers are still running" );
-			oldTimersLength = jQuery.timers.length;
-		}
-		if ( jQuery.active !== undefined && jQuery.active !== oldActive ) {
-			equal( jQuery.active, 0, "No AJAX requests are still active" );
-			oldActive = jQuery.active;
-		}
-	};
-
-	this.testIframe = function( fileName, name, fn ) {
-
-		test(name, function() {
-			// pause execution for now
-			stop();
-
-			// load fixture in iframe
-			var iframe = loadFixture(),
-				win = iframe.contentWindow,
-				interval = setInterval( function() {
-					if ( win && win.jQuery && win.jQuery.isReady ) {
-						clearInterval( interval );
-						// continue
-						start();
-						// call actual tests passing the correct jQuery instance to use
-						fn.call( this, win.jQuery, win, win.document );
-						document.body.removeChild( iframe );
-						iframe = null;
+		var completed = false,
+			remaining = requestOptions.length,
+			complete = function() {
+				if ( !completed && --remaining === 0 ) {
+					completed = true;
+					delete ajaxTest.abort;
+					if ( options.teardown ) {
+						options.teardown();
 					}
-				}, 15 );
-		});
 
-		function loadFixture() {
-			var src = url("./data/" + fileName + ".html"),
-				iframe = jQuery("<iframe />").appendTo("body")[0];
-				iframe.style.cssText = "width: 500px; height: 500px; position: absolute; top: -600px; left: -600px; visibility: hidden;";
-			iframe.contentWindow.location = src;
-			return iframe;
-		}
-	};
+					// Make sure all events will be called before done()
+					setTimeout( done );
+				}
+			},
+			requests = jQuery.map( requestOptions, function( options ) {
+				var request = ( options.create || jQuery.ajax )( options ),
+					callIfDefined = function( deferType, optionType ) {
+						var handler = options[ deferType ] || !!options[ optionType ];
+						return function( _, status ) {
+							if ( !completed ) {
+								if ( !handler ) {
+									assert.ok( false, "unexpected " + status );
+								} else if ( typeof handler === "function" ) {
+									handler.apply( this, arguments );
+								}
+							}
+						};
+					};
 
-	this.testIframeWithCallback = function( title, fileName, func ) {
+				if ( options.afterSend ) {
+					options.afterSend( request, assert );
+				}
 
-		test( title, function() {
-			var iframe;
+				return request
+					.done( callIfDefined( "done", "success" ) )
+					.fail( callIfDefined( "fail", "error" ) )
+					.always( complete );
+			} );
 
-			stop();
-			window.iframeCallback = function() {
-				var self = this,
-					args = arguments;
-				setTimeout(function() {
-					window.iframeCallback = undefined;
-					iframe.remove();
-					func.apply( self, args );
-					func = function() {};
-					start();
-				}, 0 );
-			};
-			iframe = jQuery( "<div/>" ).append(
-				jQuery( "<iframe/>" ).attr( "src", url("./data/" + fileName + ".html") )
-			).appendTo( "body" );
-		});
+		ajaxTest.abort = function( reason ) {
+			if ( !completed ) {
+				completed = true;
+				delete ajaxTest.abort;
+				assert.ok( false, "aborted " + reason );
+				jQuery.each( requests, function( i, request ) {
+					request.abort();
+				} );
+			}
+		};
+	} );
+};
+
+this.testIframe = function( title, fileName, func, wrapper ) {
+	if ( !wrapper ) {
+		wrapper = QUnit.test;
 	}
-}());
+	wrapper.call( QUnit, title, function( assert ) {
+		var done = assert.async(),
+			$iframe = supportjQuery( "<iframe></iframe>" )
+				.css( { position: "absolute", top: "0", left: "-600px", width: "500px" } )
+				.attr( { id: "qunit-fixture-iframe", src: url( fileName ) } );
 
-// Sandbox start for great justice
-(function() {
-	var oldStart = window.start;
-	window.start = function() {
-		oldStart();
-	};
-})();
+		// Test iframes are expected to invoke this via startIframeTest (cf. iframeTest.js)
+		window.iframeCallback = function() {
+			var args = Array.prototype.slice.call( arguments );
+
+			args.unshift( assert );
+
+			setTimeout( function() {
+				var result;
+
+				this.iframeCallback = undefined;
+
+				result = func.apply( this, args );
+
+				function finish() {
+					func = function() {};
+					$iframe.remove();
+					done();
+				}
+
+				// Wait for promises returned by `func`.
+				if ( result && result.then ) {
+					result.then( finish );
+				} else {
+					finish();
+				}
+			} );
+		};
+
+		// Attach iframe to the body for visibility-dependent code
+		// It will be removed by either the above code, or the testDone callback in testrunner.js
+		$iframe.prependTo( document.body );
+	} );
+};
+this.iframeCallback = undefined;
+
+// Tests are always loaded async
+// except when running tests in Karma (See Gruntfile)
+if ( !window.__karma__ ) {
+	QUnit.config.autostart = false;
+}
+
+// Leverage QUnit URL parsing to detect testSwarm environment and "basic" testing mode
+QUnit.isSwarm = ( QUnit.urlParams.swarmURL + "" ).indexOf( "http" ) === 0;
+QUnit.basicTests = ( QUnit.urlParams.module + "" ) === "basic";
+
+// Says whether jQuery positional selector extensions are supported.
+// A full selector engine is required to support them as they need to be evaluated
+// left-to-right. Remove that property when support for positional selectors is dropped.
+QUnit.jQuerySelectorsPos = true;
+
+// Says whether jQuery selector extensions are supported. Change that to `false`
+// if your custom jQuery versions relies more on native qSA.
+// This doesn't include support for positional selectors (see above).
+// TODO do we want to keep this or just assume support for jQuery extensions?
+QUnit.jQuerySelectors = true;
+
+// Support: IE 11+
+// A variable to make it easier to skip specific tests in IE, mostly
+// testing integrations with newer Web features not supported by it.
+QUnit.isIE = !!window.document.documentMode;
+QUnit.testUnlessIE = QUnit.isIE ? QUnit.skip : QUnit.test;
+
+this.loadTests = function() {
+
+	// QUnit.config is populated from QUnit.urlParams but only at the beginning
+	// of the test run. We need to read both.
+	var esmodules = QUnit.config.esmodules || QUnit.urlParams.esmodules,
+		amd = QUnit.config.amd || QUnit.urlParams.amd;
+
+	// Directly load tests that need evaluation before DOMContentLoaded.
+	if ( ( !esmodules && !amd ) || document.readyState === "loading" ) {
+		document.write( "<script src='" + parentUrl + "test/unit/ready.js'><\x2Fscript>" );
+	} else {
+		QUnit.module( "ready", function() {
+			QUnit.skip( "jQuery ready tests skipped in async mode", function() {} );
+		} );
+	}
+
+	// Get testSubproject from testrunner first
+	require( [ parentUrl + "test/data/testrunner.js" ], function() {
+		var i = 0,
+			tests = [
+				// A special module with basic tests, meant for not fully
+				// supported environments like jsdom. We run it everywhere,
+				// though, to make sure tests are not broken.
+				"unit/basic.js",
+
+				"unit/core.js",
+				"unit/callbacks.js",
+				"unit/deferred.js",
+				"unit/deprecated.js",
+				"unit/support.js",
+				"unit/data.js",
+				"unit/queue.js",
+				"unit/attributes.js",
+				"unit/event.js",
+				"unit/selector.js",
+				"unit/traversing.js",
+				"unit/manipulation.js",
+				"unit/wrap.js",
+				"unit/css.js",
+				"unit/serialize.js",
+				"unit/ajax.js",
+				"unit/effects.js",
+				"unit/offset.js",
+				"unit/dimensions.js",
+				"unit/animation.js",
+				"unit/tween.js"
+			];
+
+		// Ensure load order (to preserve test numbers)
+		( function loadDep() {
+			var dep = tests[ i++ ];
+
+			if ( dep ) {
+				if ( !QUnit.basicTests || i === 1 ) {
+					require( [ parentUrl + "test/" + dep ], loadDep );
+
+				// When running basic tests, replace other modules with dummies to avoid overloading
+				// impaired clients.
+				} else {
+					QUnit.module( dep.replace( /^.*\/|\.js$/g, "" ) );
+					loadDep();
+				}
+
+			} else {
+				if ( window.__karma__ && window.__karma__.start ) {
+					window.__karma__.start();
+				} else {
+					QUnit.load();
+				}
+
+				/**
+				 * Run in noConflict mode
+				 */
+				jQuery.noConflict();
+
+				// Load the TestSwarm listener if swarmURL is in the address.
+				if ( QUnit.isSwarm ) {
+					require( [ "http://swarm.jquery.org/js/inject.js?" + ( new Date() ).getTime() ],
+					function() {
+						QUnit.start();
+					} );
+				} else {
+					QUnit.start();
+				}
+			}
+		} )();
+	} );
+};

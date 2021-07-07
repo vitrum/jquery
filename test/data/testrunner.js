@@ -1,167 +1,94 @@
-/**
- * Allow the test suite to run with other libs or jQuery's.
- */
-jQuery.noConflict();
+( function() {
 
-// Expose Sizzle for Sizzle's selector tests
-// We remove Sizzle's globalization in jQuery
-var Sizzle = Sizzle || jQuery.find;
+"use strict";
 
-// Allow subprojects to test against their own fixtures
-var qunitModule = QUnit.module,
-	qunitTest = QUnit.test;
-function testSubproject( label, url, risTests ) {
-	var sub, fixture, fixtureHTML,
-		fixtureReplaced = false;
+// Store the old count so that we only assert on tests that have actually leaked,
+// instead of asserting every time a test has leaked sometime in the past
+var oldActive = 0,
 
-	// Don't let subproject tests jump the gun
-	QUnit.config.reorder = false;
-
-	// Create module
-	module( label );
-
-	// Duckpunch QUnit
-	module = QUnit.module = function( name ) {
-		var args = arguments;
-
-		// Remember subproject-scoped module name
-		sub = name;
-
-		// Override
-		args[0] = label;
-		return qunitModule.apply( this, args );
-	};
-	test = function( name ) {
-		var args = arguments,
-			i = args.length - 1;
-
-		// Prepend subproject-scoped module name to test name
-		args[0] = sub + ": " + name;
-
-		// Find test function and wrap to require subproject fixture
-		for ( ; i >= 0; i-- ) {
-			if ( jQuery.isFunction( args[i] ) ) {
-				args[i] = requireFixture( args[i] );
-				break;
-			}
-		}
-
-		return qunitTest.apply( this, args );
-	};
-
-	// Load tests and fixture from subproject
-	// Test order matters, so we must be synchronous and throw an error on load failure
-	jQuery.ajax( url, {
-		async: false,
-		dataType: "html",
-		error: function( jqXHR, status ) {
-			throw new Error( "Could not load: " + url + " (" + status + ")" );
-		},
-		success: function( data, status, jqXHR ) {
-			var page = jQuery.parseHTML(
-				// replace html/head with dummy elements so they are represented in the DOM
-				( data || "" ).replace( /(<\/?)(?:html|head)\b/g, "$1div" ),
-				document,
-				true
-			);
-
-			if ( !page || !page.length ) {
-				this.error( jqXHR, "no data" );
-			}
-			page = jQuery( page );
-
-			// Include subproject tests
-			page.filter("script[src]").add( page.find("script[src]") ).each(function() {
-				var src = jQuery( this ).attr("src"),
-					html = "<script src='" + url + src + "'></script>";
-				if ( risTests.test( src ) ) {
-					if ( jQuery.isReady ) {
-						jQuery("head").first().append( html );
-					} else {
-						document.write( html );
-					}
-				}
-			});
-
-			// Get the fixture, including content outside of #qunit-fixture
-			fixture = page.find("[id='qunit-fixture']");
-			fixtureHTML = fixture.html();
-			fixture.empty();
-			while ( fixture.length && !fixture.prevAll("[id^='qunit-']").length ) {
-				fixture = fixture.parent();
-			}
-			fixture = fixture.add( fixture.nextAll() );
-		}
-	});
-
-	function requireFixture( fnTest ) {
-		return function() {
-			if ( !fixtureReplaced ) {
-				// Make sure that we retrieved a fixture for the subproject
-				if ( !fixture.length ) {
-					ok( false, "Found subproject fixture" );
-					return;
-				}
-
-				// Replace the current fixture, including content outside of #qunit-fixture
-				var oldFixture = jQuery("#qunit-fixture");
-				while ( oldFixture.length && !oldFixture.prevAll("[id^='qunit-']").length ) {
-					oldFixture = oldFixture.parent();
-				}
-				oldFixture.nextAll().remove();
-				oldFixture.replaceWith( fixture );
-
-				// WARNING: UNDOCUMENTED INTERFACE
-				QUnit.config.fixture = fixtureHTML;
-				QUnit.reset();
-				if ( jQuery("#qunit-fixture").html() !== fixtureHTML ) {
-					ok( false, "Copied subproject fixture" );
-					return;
-				}
-
-				fixtureReplaced = true;
-			}
-
-			fnTest.apply( this, arguments );
-		}
-	}
-}
-
-/**
- * QUnit hooks
- */
-(function() {
-	// jQuery-specific QUnit.reset
-	var reset = QUnit.reset,
-		ajaxSettings = jQuery.ajaxSettings;
-
-	QUnit.reset = function() {
-		reset.apply(this, arguments);
-		jQuery.event.global = {};
-		jQuery.ajaxSettings = jQuery.extend({}, ajaxSettings);
-	};
-})();
+	splice = [].splice,
+	ajaxSettings = jQuery.ajaxSettings;
 
 /**
  * QUnit configuration
  */
-// Max time for stop() and asyncTest() until it aborts test
-// and start()'s the next test.
-QUnit.config.testTimeout = 20 * 1000; // 20 seconds
+
+// Max time for done() to fire in an async test.
+QUnit.config.testTimeout = 60e3; // 1 minute
+
+// Enforce an "expect" argument or expect() call in all test bodies.
+QUnit.config.requireExpects = true;
 
 /**
- * Load the TestSwarm listener if swarmURL is in the address.
+ * Ensures that tests have cleaned up properly after themselves. Should be passed as the
+ * teardown function on all modules' lifecycle object.
  */
-(function() {
-	var url = window.location.search;
-	url = decodeURIComponent( url.slice( url.indexOf("swarmURL=") + "swarmURL=".length ) );
+window.moduleTeardown = function( assert ) {
 
-	if ( !url || url.indexOf("http") !== 0 ) {
-		return;
+	// Check for (and clean up, if possible) incomplete animations/requests/etc.
+	if ( jQuery.timers && jQuery.timers.length !== 0 ) {
+		assert.equal( jQuery.timers.length, 0, "No timers are still running" );
+		splice.call( jQuery.timers, 0, jQuery.timers.length );
+		jQuery.fx.stop();
+	}
+	if ( jQuery.active !== undefined && jQuery.active !== oldActive ) {
+		assert.equal( jQuery.active, oldActive, "No AJAX requests are still active" );
+		if ( ajaxTest.abort ) {
+			ajaxTest.abort( "active requests" );
+		}
+		oldActive = jQuery.active;
 	}
 
-	// (Temporarily) Disable Ajax tests to reduce network strain
-	// isLocal = QUnit.isLocal = true;
+	Globals.cleanup();
+};
 
-	document.write("<scr" + "ipt src='http://swarm.jquery.org/js/inject.js?" + (new Date).getTime() + "'></scr" + "ipt>");
-})();
+QUnit.done( function() {
+
+	// Remove our own fixtures outside #qunit-fixture
+	supportjQuery( "#qunit ~ *" ).remove();
+} );
+
+QUnit.testDone( function() {
+
+	// Ensure jQuery events and data on the fixture are properly removed
+	jQuery( "#qunit-fixture" ).empty();
+
+	// ...even if the jQuery under test has a broken .empty()
+	supportjQuery( "#qunit-fixture" ).empty();
+
+	// Remove the iframe fixture
+	supportjQuery( "#qunit-fixture-iframe" ).remove();
+
+	// Reset internal jQuery state
+	if ( ajaxSettings ) {
+		jQuery.ajaxSettings = jQuery.extend( true, {}, ajaxSettings );
+	} else {
+		delete jQuery.ajaxSettings;
+	}
+
+	// Cleanup globals
+	Globals.cleanup();
+} );
+
+// Register globals for cleanup and the cleanup code itself
+window.Globals = ( function() {
+	var globals = {};
+
+	return {
+		register: function( name ) {
+			window[ name ] = globals[ name ] = true;
+		},
+
+		cleanup: function() {
+			var name;
+
+			for ( name in globals ) {
+				delete window[ name ];
+			}
+
+			globals = {};
+		}
+	};
+} )();
+
+} )();

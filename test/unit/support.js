@@ -1,258 +1,164 @@
-module("support", { teardown: moduleTeardown });
+QUnit.module( "support", { afterEach: moduleTeardown } );
 
-test("boxModel", function() {
-	expect( 1 );
+var computedSupport = getComputedSupport( jQuery.support );
 
-	equal( jQuery.support.boxModel, document.compatMode === "CSS1Compat" , "jQuery.support.boxModel is sort of tied to quirks mode but unstable since 1.8" );
-});
+function getComputedSupport( support ) {
+	var prop,
+		result = {};
+
+	for ( prop in support ) {
+		if ( typeof support[ prop ] === "function" ) {
+			result[ prop ] = support[ prop ]();
+		} else {
+			result[ prop ] = support[ prop ];
+		}
+	}
+
+	return result;
+}
 
 if ( jQuery.css ) {
-	testIframeWithCallback( "body background is not lost if set prior to loading jQuery (#9238)", "support/bodyBackground", function( color, support ) {
-		expect( 2 );
-		var i,
-			passed = true,
-			okValue = {
+	testIframe(
+		"body background is not lost if set prior to loading jQuery (#9239)",
+		"support/bodyBackground.html",
+		function( assert, jQuery, window, document, color, support ) {
+			assert.expect( 2 );
+			var okValue = {
 				"#000000": true,
 				"rgb(0, 0, 0)": true
 			};
-		ok( okValue[ color ], "color was not reset (" + color + ")" );
+			assert.ok( okValue[ color ], "color was not reset (" + color + ")" );
 
-		for ( i in jQuery.support ) {
-			if ( jQuery.support[ i ] !== support[ i ] ) {
-				passed = false;
-				strictEqual( jQuery.support[ i ], support[ i ], "Support property " + i + " is different" );
-			}
+			assert.deepEqual( jQuery.extend( {}, support ), computedSupport,
+				"Same support properties" );
 		}
-		for ( i in support ) {
-			if ( !( i in jQuery.support ) ) {
-				passed = false;
-				strictEqual( jQuery.support[ i ], support[ i ], "Unexpected property: " + i );
-			}
-		}
-		ok( passed, "Same support properties" );
-	});
+	);
 }
 
-testIframeWithCallback( "A background on the testElement does not cause IE8 to crash (#9823)", "support/testElementCrash", function() {
-	expect(1);
-	ok( true, "IE8 does not crash" );
-});
+// This test checks CSP only for browsers with "Content-Security-Policy" header support
+// i.e. no IE
+testIframe(
+	"Check CSP (https://developer.mozilla.org/en-US/docs/Security/CSP) restrictions",
+	"mock.php?action=cspFrame",
+	function( assert, jQuery, window, document, support ) {
+		var done = assert.async();
 
-(function() {
+		assert.expect( 2 );
+		assert.deepEqual( jQuery.extend( {}, support ), computedSupport,
+			"No violations of CSP polices" );
 
-	var userAgent = window.navigator.userAgent,
-		expected;
+		supportjQuery.get( baseURL + "support/csp.log" ).done( function( data ) {
+			assert.equal( data, "", "No log request should be sent" );
+			supportjQuery.get( baseURL + "mock.php?action=cspClean" ).done( done );
+		} );
+	}
+);
 
-	// These tests do not have to stay
-	// They are here to help with upcoming support changes for 1.8
-	if ( /chrome\/19\.0/i.test(userAgent) ) {
-		expected = {
-			"leadingWhitespace":true,
-			"tbody":true,
-			"htmlSerialize":true,
-			"style":true,
-			"hrefNormalized":true,
-			"opacity":true,
-			"cssFloat":true,
-			"checkOn":true,
-			"optSelected":true,
-			"getSetAttribute":true,
-			"enctype":true,
-			"html5Clone":true,
-			"submitBubbles":true,
-			"changeBubbles":true,
-			"focusinBubbles":false,
-			"deleteExpando":true,
-			"noCloneEvent":true,
-			"inlineBlockNeedsLayout":false,
-			"shrinkWrapBlocks":false,
-			"reliableMarginRight":true,
-			"noCloneChecked":true,
-			"optDisabled":true,
-			"radioValue":true,
-			"checkClone":true,
-			"appendChecked":true,
-			"boxModel":true,
-			"reliableHiddenOffsets":true,
-			"ajax":true,
-			"cors":true,
-			"doesNotIncludeMarginInBodyOffset":true
+( function() {
+	var expected,
+		userAgent = window.navigator.userAgent,
+		expectedMap = {
+			ie_11: {
+				"reliableTrDimensions": false
+			},
+			chrome: {
+				"reliableTrDimensions": true
+			},
+			safari: {
+				"reliableTrDimensions": true
+			},
+			firefox: {
+				"reliableTrDimensions": false
+			},
+			ios: {
+				"reliableTrDimensions": true
+			}
 		};
-	} else if ( /msie 8\.0/i.test(userAgent) ) {
-		expected = {
-			"leadingWhitespace":false,
-			"tbody":true,
-			"htmlSerialize":false,
-			"style":false,
-			"hrefNormalized":true,
-			"opacity":false,
-			"cssFloat":false,
-			"checkOn":true,
-			"optSelected":false,
-			"getSetAttribute":true,
-			"enctype":true,
-			"html5Clone":false,
-			"submitBubbles":false,
-			"changeBubbles":false,
-			"focusinBubbles":true,
-			"deleteExpando":false,
-			"noCloneEvent":false,
-			"inlineBlockNeedsLayout":false,
-			"shrinkWrapBlocks":false,
-			"reliableMarginRight":true,
-			"noCloneChecked":false,
-			"optDisabled":true,
-			"radioValue":false,
-			"checkClone":true,
-			"appendChecked":true,
-			"boxModel":true,
-			"reliableHiddenOffsets":false,
-			"ajax":true,
-			"cors":false,
-			"doesNotIncludeMarginInBodyOffset":true
-		};
-	} else if ( /msie 7\.0/i.test(userAgent) ) {
-		expected = {
-			"ajax": true,
-			"appendChecked": false,
-			"boxModel": true,
-			"changeBubbles": false,
-			"checkClone": false,
-			"checkOn": true,
-			"cors": false,
-			"cssFloat": false,
-			"deleteExpando": false,
-			"doesNotIncludeMarginInBodyOffset": true,
-			"enctype": true,
-			"focusinBubbles": true,
-			"getSetAttribute": false,
-			"hrefNormalized": false,
-			"html5Clone": false,
-			"htmlSerialize": false,
-			"inlineBlockNeedsLayout": true,
-			"leadingWhitespace": false,
-			"noCloneChecked": false,
-			"noCloneEvent": false,
-			"opacity": false,
-			"optDisabled": true,
-			"optSelected": false,
-			"radioValue": false,
-			"reliableHiddenOffsets": false,
-			"reliableMarginRight": true,
-			"shrinkWrapBlocks": false,
-			"submitBubbles": false,
-			"tbody": false,
-			"style": false
-		};
-	} else if ( /msie 6\.0/i.test(userAgent) ) {
-		expected = {
-			"leadingWhitespace":false,
-			"tbody":false,
-			"htmlSerialize":false,
-			"style":false,
-			"hrefNormalized":false,
-			"opacity":false,
-			"cssFloat":false,
-			"checkOn":true,
-			"optSelected":false,
-			"getSetAttribute":false,
-			"enctype":true,
-			"html5Clone":false,
-			"submitBubbles":false,
-			"changeBubbles":false,
-			"focusinBubbles":true,
-			"deleteExpando":false,
-			"noCloneEvent":false,
-			"inlineBlockNeedsLayout":true,
-			"shrinkWrapBlocks":true,
-			"reliableMarginRight":true,
-			"noCloneChecked":false,
-			"optDisabled":true,
-			"radioValue":false,
-			"checkClone":false,
-			"appendChecked":false,
-			"boxModel":true,
-			"reliableHiddenOffsets":false,
-			"ajax":true,
-			"cors":false,
-			"doesNotIncludeMarginInBodyOffset":true
-		};
-	} else if ( /5\.1\.1 safari/i.test(userAgent) ) {
-		expected = {
-			"leadingWhitespace":true,
-			"tbody":true,
-			"htmlSerialize":true,
-			"style":true,
-			"hrefNormalized":true,
-			"opacity":true,
-			"cssFloat":true,
-			"checkOn":false,
-			"optSelected":true,
-			"getSetAttribute":true,
-			"enctype":true,
-			"html5Clone":true,
-			"submitBubbles":true,
-			"changeBubbles":true,
-			"focusinBubbles":false,
-			"deleteExpando":true,
-			"noCloneEvent":true,
-			"inlineBlockNeedsLayout":false,
-			"shrinkWrapBlocks":false,
-			"reliableMarginRight":true,
-			"noCloneChecked":true,
-			"optDisabled":true,
-			"radioValue":true,
-			"checkClone":false,
-			"appendChecked":false,
-			"boxModel":true,
-			"reliableHiddenOffsets":true,
-			"ajax":true,
-			"cors":true,
-			"doesNotIncludeMarginInBodyOffset":true
-		};
-	} else if ( /firefox\/3\.6/i.test(userAgent) ) {
-		expected = {
-			"leadingWhitespace":true,
-			"tbody":true,
-			"htmlSerialize":true,
-			"style":true,
-			"hrefNormalized":true,
-			"opacity":true,
-			"cssFloat":true,
-			"checkOn":true,
-			"optSelected":true,
-			"getSetAttribute":true,
-			"enctype":false,
-			"html5Clone":true,
-			"submitBubbles":true,
-			"changeBubbles":true,
-			"focusinBubbles":false,
-			"deleteExpando":true,
-			"noCloneEvent":true,
-			"inlineBlockNeedsLayout":false,
-			"shrinkWrapBlocks":false,
-			"reliableMarginRight":true,
-			"noCloneChecked":true,
-			"optDisabled":true,
-			"radioValue":true,
-			"checkClone":true,
-			"appendChecked":true,
-			"boxModel":true,
-			"reliableHiddenOffsets":true,
-			"ajax":true,
-			"cors":true,
-			"doesNotIncludeMarginInBodyOffset":true
-		};
+
+	if ( document.documentMode ) {
+		expected = expectedMap.ie_11;
+	} else if ( /chrome/i.test( userAgent ) ) {
+
+		// Catches Edge, Chrome on Android & Opera as well.
+		expected = expectedMap.chrome;
+	} else if ( /\b\d+(\.\d+)+ safari/i.test( userAgent ) ) {
+		expected = expectedMap.safari;
+	} else if ( /firefox/i.test( userAgent ) ) {
+		expected = expectedMap.firefox;
+	} else if ( /(?:iphone|ipad);.*(?:iphone)? os \d+_/i.test( userAgent ) ) {
+		expected = expectedMap.ios;
 	}
 
-	if ( expected ) {
-		test("Verify that the support tests resolve as expected per browser", function() {
-			for ( var i in expected ) {
-				if ( jQuery.ajax || i !== "ajax" && i !== "cors" ) {
-					equal( jQuery.support[i], expected[i], "jQuery.support['" + i + "']: " + jQuery.support[i] + ", expected['" + i + "']: " + expected[i]);
+	QUnit.test( "Verify that support tests resolve as expected per browser", function( assert ) {
+		if ( !expected ) {
+			assert.expect( 1 );
+			assert.ok( false, "Known client: " + userAgent );
+		}
+
+		var i, prop,
+			j = 0;
+
+		for ( prop in computedSupport ) {
+			j++;
+		}
+
+		// Add an assertion per undefined support prop as it may
+		// not even exist on computedSupport but we still want to run
+		// the check.
+		for ( prop in expected ) {
+			if ( expected[ prop ] === undefined ) {
+				j++;
+			}
+		}
+
+		assert.expect( j );
+
+		for ( i in expected ) {
+			assert.equal( computedSupport[ i ], expected[ i ],
+				"jQuery.support['" + i + "']: " + computedSupport[ i ] +
+					", expected['" + i + "']: " + expected[ i ] );
+		}
+	} );
+
+	QUnit.test( "Verify support tests are failing in one of tested browsers",
+		function( assert ) {
+
+		var prop, browserKey, supportTestName,
+			i = 0,
+			supportProps = {},
+			failingSupportProps = {};
+
+		for ( prop in computedSupport ) {
+			i++;
+		}
+
+		// Add an assertion per undefined support prop as it may
+		// not even exist on computedSupport but we still want to run
+		// the check.
+		for ( prop in expected ) {
+			if ( expected[ prop ] === undefined ) {
+				i++;
+			}
+		}
+
+		assert.expect( i );
+
+		// Record all support props and the failing ones and ensure every test
+		// is failing at least once.
+		for ( browserKey in expectedMap ) {
+			for ( supportTestName in expectedMap[ browserKey ] ) {
+				supportProps[ supportTestName ] = true;
+				if ( !expectedMap[ browserKey ][ supportTestName ] ) {
+					failingSupportProps[ supportTestName ] = true;
 				}
 			}
-		});
-	}
+		}
 
-})();
+		for ( supportTestName in supportProps ) {
+			assert.ok( failingSupportProps[ supportTestName ],
+				"jQuery.support['" + supportTestName +
+					"'] is expected to fail at least in one browser" );
+		}
+	} );
+
+} )();
